@@ -1,30 +1,36 @@
 """
-OUTPOST ZERO - Text-Based Prototype
-A survival game about building a community through discovery
+OUTPOST ZERO - Playable Prototype
+A survival colony sim - BUILD AND PLAY
 """
 
 import random
 import time
-from datetime import datetime
+import os
+import sys
 
 # ==================== GAME STATE ====================
 
 class Game:
     def __init__(self):
         self.day = 1
-        self.food = 12
-        self.water = 20
-        self.materials = 10
-        self.medicine = 2
-        self.ammo = 10
-        self.books = ["Gardening Basics"]  # Start with one book
-        self.discovered_recipes = []
-        self.buildings = ["Farmhouse", "Fire Pit"]
+        self.food = 30
+        self.water = 30
+        self.materials = 15
+        self.medicine = 3
+        self.ammo = 5
+        self.scrap = 20
+        self.books = ["Gardening Basics"]
+        self.buildings = {"Farmhouse": 1, "Fire Pit": 1, "Storage": 1}
         self.survivors = []
         self.game_over = False
+        self.tech_level = 1
+        self.population_cap = 10
         
     def add_survivor(self, survivor):
-        self.survivors.append(survivor)
+        if len(self.survivors) < self.population_cap:
+            self.survivors.append(survivor)
+            return True
+        return False
 
 # ==================== CHARACTERS ====================
 
@@ -35,12 +41,12 @@ class Survivor:
         self.sex = sex
         self.profession = profession
         
-        # Stats (1-100)
+        # Stats
         self.health = 100
         self.stamina = 100
-        self.stress = 10
+        self.happiness = 50  # 0-100
         
-        # Skills
+        # Skills (1-100)
         self.skills = {
             "Scavenging": random.randint(10, 25),
             "Hunting": random.randint(10, 25),
@@ -52,240 +58,348 @@ class Survivor:
             "Combat": random.randint(10, 25),
             "Medical": random.randint(5, 15),
             "Crafting": random.randint(10, 25),
-            "Teaching": random.randint(5, 15),
-            "Science": random.randint(5, 15),
         }
         
-        # Education (1-6: Illiterate → PhD)
-        self.education = random.choice([1, 1, 2, 2, 2, 3])  # Weighted toward basic/grade school
+        # Job
+        self.job = "Unassigned"
         
         # Personality
-        self.mood = random.choice(["Happy", "Content", "Neutral", "Anxious", "Grumpy"])
-        self.disposition = random.choice(["Calm", "Joyful", "Aloof", "Grumpy", "Serious"])
-        self.traits = random.sample(["Brave", "Curious", "Honest", "Patient", "Lazy", "Cowardly", "Selfish", "Kind"], 2)
+        self.traits = []
+        self.favorite_food = random.choice(["Meat", "Berries", "Fish", "Vegetables", "Anything"])
         
-        # Injuries
-        self.injuries = []
-        
-        # Memory/Relationships (key = survivor name, value = -100 to +100)
+        # Relationships (name -> -100 to +100)
         self.relationships = {}
         
-        # Stats this character cares about
-        self.favorite_food = random.choice(["Meat", "Berries", "Fish", "Vegetables"])
+        # Status
+        self.injuries = []
+        self.is_alive = True
         
     def __str__(self):
-        return f"{self.name} ({self.profession})"
+        status = f"{self.name} | HP:{self.health} ST:{self.stamina} HAPP:{self.happiness}"
+        if self.injuries:
+            status += f" [{', '.join(self.injuries)}]"
+        return status
 
-# ==================== STARTING CHARACTERS ====================
+# ==================== CREATE CHARACTERS ====================
+
+def create_character(name, age, profession, skills, traits, food, sex="Male"):
+    s = Survivor(name, age, sex, profession)
+    for skill, level in skills.items():
+        s.skills[skill] = level
+    s.traits = traits
+    s.favorite_food = food
+    return s
 
 def create_starting_characters():
-    chars = [
-        Survivor("Marcus", 34, "Male", "Leader"),
-        Survivor("Sarah", 28, "Female", "Hunter"),
-        Survivor("Ryan", 42, "Male", "Scavenger"),
-        Survivor("Elena", 24, "Female", "Builder"),
-    ]
+    # Marcus - leader
+    marcus = create_character("Marcus", 34, "Leader", 
+        {"Scavenging": 35, "Combat": 30, "Building": 25}, 
+        ["Brave", "Protective"], "Meat", "Male")
+    marcus.happiness = 60
     
-    # Customize some stats
-    chars[0].skills["Leadership"] = 30
-    chars[0].skills["Scavenging"] = 35
-    chars[0].education = 3  # Grade school
+    # Sarah - hunter
+    sarah = create_character("Sarah", 28, "Hunter",
+        {"Hunting": 45, "Fishing": 35, "Scavenging": 20},
+        ["Patient", "Kind"], "Fish", "Female")
+    sarah.happiness = 55
     
-    chars[1].skills["Hunting"] = 45
-    chars[1].skills["Fishing"] = 35
-    chars[1].traits = ["Patient", "Kind"]
-    chars[1].favorite_food = "Fish"
+    # Ryan - scavenger
+    ryan = create_character("Ryan", 42, "Scavenger",
+        {"Scavenging": 50, "Gathering": 35, "Combat": 25},
+        ["Cautious", "Selfish"], "Anything", "Male")
+    ryan.happiness = 45
     
-    chars[2].skills["Scavenging"] = 50
-    chars[2].skills["Combat"] = 30
-    chars[2].traits = ["Cautious", "Selfish"]
-    chars[2].education = 2
+    # Elena - builder
+    elena = create_character("Elena", 24, "Builder",
+        {"Building": 40, "Crafting": 35, "Farming": 20},
+        ["Creative", "Curious"], "Vegetables", "Female")
+    elena.happiness = 50
     
-    chars[3].skills["Building"] = 40
-    chars[3].skills["Crafting"] = 35
-    chars[3].traits = ["Curious", "Creative"]
-    chars[3].education = 2
-    
-    return chars
+    return [marcus, sarah, ryan, elena]
 
 # ==================== ACTIONS ====================
 
-def scavenge(survivor, game):
-    """Send survivor to scavenge in the wasteland"""
+def do_scavenge(survivor, game):
+    """Scavenge in dangerous areas"""
     skill = survivor.skills["Scavenging"]
     roll = random.randint(1, 100)
     result = skill + roll
     
-    print(f"\n{survivor.name} goes scavenging...")
-    time.sleep(0.5)
+    print(f"\n  {survivor.name} goes scavenging...")
     
-    if result > 80:  # Great success
-        found = random.sample(["Food", "Food", "Materials", "Medicine", "Book", "Ammo"], 2)
+    if result > 100:  # Amazing
+        found = random.sample(["food", "materials", "medicine", "ammo", "scrap", "book"], 3)
         for item in found:
-            add_item(item, game)
-        print(f"  GREAT FIND! Found: {', '.join(found)}")
-        return True
-    elif result > 50:  # Success
-        found = random.choice(["Food", "Materials", "Food", "Ammo", "Scrap"])
-        add_item(found, game)
-        print(f"  Found: {found}")
-        return True
-    elif result > 30:  # Mixed
-        found = random.choice(["Food", "Nothing"])
-        if found != "Nothing":
-            add_item(found, game)
-            print(f"  Found: {found}")
-        else:
-            print("  Found nothing, but stayed safe.")
-        return True
-    else:  # Failure
-        if random.random() < 0.3:
-            injury = random.choice(["Cut", "Bruise", "Sprain"])
+            add_item(item, game, 1)
+        print(f"    AMAZING! Found: {', '.join(found)}")
+    elif result > 70:  # Good
+        found = random.sample(["food", "materials", "medicine", "scrap"], 2)
+        for item in found:
+            add_item(item, game, 1)
+        print(f"    Good haul: {', '.join(found)}")
+    elif result > 40:  # OK
+        found = random.choice(["food", "materials", "scrap"])
+        add_item(found, game, 1)
+        print(f"    Found: {found}")
+    else:  # Bad
+        if random.random() < 0.25:
+            injury = random.choice(["Cut", "Bruise"])
             survivor.injuries.append(injury)
-            print(f"  BAD LUCK! Got injured: {injury}")
+            survivor.health -= 15
+            print(f"    BAD! Got injured: {injury} (-15 HP)")
         else:
-            print("  Couldn't find anything and barely escaped!")
-        return False
+            print(f"    Found nothing.")
 
-def hunt(survivor, game):
-    """Send survivor hunting"""
+def do_hunt(survivor, game):
+    """Hunt for food"""
     skill = survivor.skills["Hunting"]
     roll = random.randint(1, 100)
     result = skill + roll
     
-    print(f"\n{survivor.name} goes hunting...")
-    time.sleep(0.5)
+    print(f"\n  {survivor.name} goes hunting...")
     
-    if result > 70:
-        game.food += 10
-        print(f"  SUCCESS! Caught a deer! (+10 Food)")
-    elif result > 40:
-        game.food += 5
-        print(f"  Got a rabbit. (+5 Food)")
-    elif result > 20:
-        game.food += 2
-        print(f"  Small catch. (+2 Food)")
+    if result > 80:
+        game.food += 15
+        print(f"    SUCCESS! Big deer! +15 food")
+    elif result > 50:
+        game.food += 8
+        print(f"    Got a rabbit. +8 food")
+    elif result > 30:
+        game.food += 4
+        print(f"    Small catch. +4 food")
     else:
-        print("  No luck today.")
-        if random.random() < 0.2:
-            injury = "Sprain"
-            survivor.injuries.append(injury)
-            print(f"  And got injured: {injury}")
+        print(f"    No luck today.")
+        if random.random() < 0.15:
+            survivor.health -= 10
+            print(f"    Wolf attack! -10 HP")
 
-def gather(survivor, game):
-    """Send survivor to gather wild plants"""
+def do_gather(survivor, game):
+    """Gather berries, wood, herbs"""
     skill = survivor.skills["Gathering"]
     roll = random.randint(1, 100)
-    result = skill + roll
     
-    print(f"\n{survivor.name} goes gathering...")
-    time.sleep(0.5)
+    print(f"\n  {survivor.name} goes gathering...")
     
     finds = []
-    for _ in range(2):
-        roll = skill + random.randint(1, 100)
-        if roll > 40:
-            finds.append(random.choice(["Berries", "Mushrooms", "Herbs", "Firewood"]))
+    for _ in range(3):
+        if skill + random.randint(1, 100) > 40:
+            finds.append(random.choice(["berries", "firewood", "herbs", "mushrooms"]))
     
     if finds:
         for item in finds:
-            if item == "Food":
+            if item == "berries":
                 game.food += 2
-            elif item == "Berries":
-                game.food += 3
-            elif item == "Firewood":
+            elif item == "firewood":
                 game.materials += 2
+            elif item == "herbs":
+                game.medicine += 1
             else:
-                game.materials += 1
-        print(f"  Found: {', '.join(finds)}")
+                game.food += 1
+        print(f"    Found: {', '.join(finds)}")
     else:
-        print("  Found nothing useful.")
+        print(f"    Found nothing useful.")
 
-def farm(survivor, game):
-    """Send survivor to farm"""
+def do_farm(survivor, game):
+    """Farm crops"""
     skill = survivor.skills["Farming"]
     roll = skill + random.randint(1, 100)
     
-    print(f"\n{survivor.name} tends the farm...")
-    time.sleep(0.5)
+    print(f"\n  {survivor.name} works on the farm...")
     
-    if roll > 40:
-        food_gain = random.randint(3, 8)
-        game.food += food_gain
-        print(f"  Harvest! +{food_gain} Food")
-    else:
-        print("  Crops didn't grow well this time.")
-
-def rest(survivor, game):
-    """Rest and recover"""
-    print(f"\n{survivor.name} rests and recovers.")
-    survivor.stamina = min(100, survivor.stamina + 30)
-    survivor.health = min(100, survivor.health + 5)
-    if survivor.injuries:
-        if random.random() < 0.3:
-            removed = survivor.injuries.pop()
-            print(f"  Injury healed: {removed}")
-
-def build(survivor, game):
-    """Try to build something"""
-    skill = survivor.skills["Building"]
-    roll = skill + random.randint(1, 100)
-    
-    print(f"\n{survivor.name} tries to build...")
-    time.sleep(0.5)
-    
-    if game.materials < 5:
-        print("  Not enough materials!")
+    if "Farm" not in game.buildings:
+        print(f"    No farm! Can't farm.")
         return
-        
-    if roll > 50:
-        new_building = random.choice(["Greenhouse", "Smokehouse", "Well", "Workshop"])
-        game.buildings.append(new_building)
-        game.materials -= 5
-        print(f"  Built: {new_building}!")
+    
+    if roll > 60:
+        food_gain = random.randint(5, 12)
+        game.food += food_gain
+        print(f"    Great harvest! +{food_gain} food")
+    elif roll > 30:
+        food_gain = random.randint(2, 5)
+        game.food += food_gain
+        print(f"    Harvest: +{food_gain} food")
     else:
-        game.materials -= 2
-        print("  Made some progress, but not finished.")
+        print(f"    Poor harvest this time.")
+
+def do_build(survivor, game):
+    """Build something"""
+    skill = survivor.skills["Building"]
+    
+    print(f"\n  {survivor.name} tries to build...")
+    
+    if game.materials < 10:
+        print(f"    Not enough materials! Need 10.")
+        return
+    
+    if skill + random.randint(1, 100) > 50:
+        building = random.choice(["Workshop", "Well", "Chicken Coop", "Greenhouse", "Pen"])
+        if building not in game.buildings:
+            game.buildings[building] = 1
+            game.materials -= 10
+            print(f"    Built {building}!")
+        else:
+            game.buildings[building] += 1
+            game.materials -= 10
+            print(f"    Upgraded {building}!")
+    else:
+        game.materials -= 3
+        print(f"    Made some progress. Used 3 materials.")
+
+def do_rest(survivor, game):
+    """Rest and recover"""
+    print(f"\n  {survivor.name} rests...")
+    heal = random.randint(10, 20)
+    stamina = random.randint(20, 35)
+    survivor.health = min(100, survivor.health + heal)
+    survivor.stamina = min(100, survivor.stamina + stamina)
+    print(f"    +{heal} HP, +{stamina} Stamina")
+    
+    # Heal injuries
+    if survivor.injuries and random.random() < 0.3:
+        recovered = survivor.injuries.pop()
+        print(f"    Healed: {recovered}")
+
+def do_cook(survivor, game):
+    """Cook food (requires Kitchen)"""
+    print(f"\n  {survivor.name} cooks...")
+    
+    if game.food < 5:
+        print(f"    Not enough food to cook!")
+        return
+    
+    # Better food with cooking skill
+    bonus = survivor.skills["Cooking"] // 20
+    food_made = 4 + bonus
+    
+    if random.random() < 0.3:
+        # Special meal!
+        game.food -= 3
+        game.food += food_made + 3
+        print(f"    Made a special meal! +{food_made + 3} food (better)")
+        # Happiness boost
+        for s in game.survivors:
+            if s.favorite_food in ["Meat", "Fish"]:
+                s.happiness += 5
+    else:
+        game.food -= 3
+        game.food += food_made
+        print(f"    Cooked: +{food_made} food")
+
+def do_guard(survivor, game):
+    """Guard the settlement"""
+    print(f"\n  {survivor.name} stands guard...")
+    
+    # Random enemy encounter
+    if random.random() < 0.2:
+        enemy = random.choice(["wolf", "zombie", "raider"])
+        print(f"    ENEMY! A {enemy} approaches!")
+        
+        combat_roll = survivor.skills["Combat"] + random.randint(1, 100)
+        
+        if combat_roll > 60:
+            print(f"    {survivor.name} defeated the {enemy}!")
+            if random.random() < 0.3:
+                loot = random.choice(["ammo", "medicine", "food"])
+                add_item(loot, game, 1)
+                print(f"    Looted: {loot}")
+        else:
+            damage = random.randint(10, 25)
+            survivor.health -= damage
+            print(f"    {survivor.name} took {damage} damage!")
+            if random.random() < 0.2:
+                survivor.injuries.append("Wound")
+    else:
+        print(f"    Quiet night. All clear.")
 
 # ==================== HELPERS ====================
 
-def add_item(item, game):
-    if item == "Food":
-        game.food += random.randint(2, 5)
-    elif item == "Materials":
-        game.materials += random.randint(1, 4)
-    elif item == "Medicine":
-        game.medicine += 1
-    elif item == "Ammo":
-        game.ammo += random.randint(1, 3)
-    elif item == "Book":
-        new_books = ["Hunting Guide", "Fishing Manual", "Carpentry Guide", "First Aid", "Botany", "Mechanics"]
-        found_book = random.choice(new_books)
-        if found_book not in game.books:
-            game.books.append(found_book)
-            print(f"  NEW BOOK DISCOVERED: {found_book}")
-    elif item == "Scrap":
-        game.materials += random.randint(2, 6)
+def add_item(item, game, amount=1):
+    if item == "food":
+        game.food += amount * random.randint(2, 5)
+    elif item == "materials":
+        game.materials += amount * random.randint(1, 3)
+    elif item == "scrap":
+        game.scrap += amount * random.randint(2, 5)
+    elif item == "medicine":
+        game.medicine += amount
+    elif item == "ammo":
+        game.ammo += amount * random.randint(1, 3)
+    elif item == "book":
+        books = ["Hunting Guide", "Fishing Manual", "Carpentry", "First Aid", "Botany", "Mechanics"]
+        found = random.choice(books)
+        if found not in game.books:
+            game.books.append(found)
+            print(f"    NEW BOOK: {found}!")
 
 def check_game_over(game):
-    """Check if game is over"""
     if game.food <= 0:
         print("\n" + "="*50)
         print("GAME OVER - Starvation!")
         print("Your settlement has collapsed.")
         return True
-    if game.survivors and all(s.health <= 0 for s in game.survivors):
+    alive = [s for s in game.survivors if s.is_alive and s.health > 0]
+    if not alive:
         print("\n" + "="*50)
-        print("GAME OVER - Everyone has perished!")
+        print("GAME OVER")
+        print("Everyone has perished!")
         return True
     return False
 
-# ==================== MAIN GAME LOOP ====================
+def print_status(game):
+    print(f"\n{'='*50}")
+    print(f"DAY {game.day} - {game.survivors[0].profession}'s Settlement")
+    print(f"{'='*50}")
+    print(f"\nRESOURCES:")
+    print(f"  Food: {game.food}  Water: {game.water}  Scrap: {game.scrap}")
+    print(f"  Materials: {game.materials}  Medicine: {game.medicine}  Ammo: {game.ammo}")
+    print(f"  Tech Level: {game.tech_level}")
+    print(f"\nBUILDINGS: {', '.join([f'{k}(v{v})' for k,v in game.buildings.items()])}")
+    print(f"\nBOOKS: {', '.join(game.books) if game.books else 'None'}")
+    
+    print(f"\nSURVIVORS ({len(game.survivors)}/{game.population_cap}):")
+    for s in game.survivors:
+        if s.health > 0:
+            mood = "+" if s.happiness > 60 else "=" if s.happiness > 40 else "-"
+            print(f"  {mood} {s.name}: {s.job} | HP:{s.health} ST:{s.stamina} HAPP:{s.happiness}")
+            if s.injuries:
+                print(f"      INJURIES: {', '.join(s.injuries)}")
+
+def get_job_choice(survivor):
+    jobs = [
+        ("1", "Scavenge"),
+        ("2", "Hunt"),
+        ("3", "Gather"),
+        ("4", "Farm"),
+        ("5", "Build"),
+        ("6", "Cook"),
+        ("7", "Rest"),
+        ("8", "Guard"),
+    ]
+    
+    skill_map = {
+        "1": "Scavenging", "2": "Hunting", "3": "Gathering",
+        "4": "Farming", "5": "Building", "6": "Cooking",
+        "7": "Rest", "8": "Combat"
+    }
+    
+    print(f"\n{survivor.name}'s skills:")
+    for num, job in jobs:
+        skill_level = survivor.skills.get(skill_map[num], 10)
+        print(f"  {num}: {job} ({skill_level})")
+    
+    while True:
+        choice = input(f"\nChoose task for {survivor.name} (1-8): ").strip()
+        for num, job in jobs:
+            if choice == num:
+                return job, skill_map[num]
+        print("Invalid choice. 1-8 please.")
+
+# ==================== MAIN GAME ====================
 
 def main():
     print("="*60)
     print("         OUTPOST ZERO")
-    print("    A Survival Discovery Game")
+    print("   A Colony Survival Simulator")
     print("="*60)
     print()
     
@@ -293,136 +407,105 @@ def main():
     game = Game()
     game.survivors = create_starting_characters()
     
-    print("Your group of survivors has settled in an abandoned farmhouse.")
-    print("You have the Gardening book from the car trunk.")
-    print()
-    print(f"Starting with {len(game.survivors)} survivors:")
-    for s in game.survivors:
-        print(f"  - {s.name}: {s.profession}")
-    print()
-    print("Day 1 begins...")
-    print()
+    print("Your group of 4 survivors has settled in an old farmhouse.")
+    print("You have the 'Gardening Basics' book.")
+    print("Day 1 begins...\n")
     
     # Main game loop
     while not game.game_over:
-        print("\n" + "="*50)
-        print(f"DAY {game.day} - Morning")
-        print("="*50)
-        
-        # Show status
-        print(f"\nRESOURCES:")
-        print(f"  Food: {game.food} | Water: {game.water} | Materials: {game.materials}")
-        print(f"  Medicine: {game.medicine} | Ammo: {game.ammo}")
-        print(f"  Buildings: {', '.join(game.buildings)}")
-        print(f"  Books: {', '.join(game.books)}")
-        
-        print(f"\nSURVIVORS:")
-        for s in game.survivors:
-            injuries = f" ({', '.join(s.injuries)})" if s.injuries else ""
-            print(f"  {s.name}: HP {s.health} | ST {s.stamina} | Mood: {s.mood}{injuries}")
+        print_status(game)
         
         # Check starvation
-        if game.food <= 0:
-            print("\n⚠️ OUT OF FOOD! Someone will die!")
-            victim = random.choice(game.survivors)
-            victim.health = 0
-            print(f"  {victim.name} has perished from starvation!")
+        if game.food < len(game.survivors) * 2:
+            print(f"\n⚠️ LOW FOOD! {len(game.survivors) * 2} needed per day!")
         
-        # Day phase - assign tasks
+        # Player assigns tasks
         print("\n" + "-"*40)
-        print("TASK ASSIGNMENT")
+        print("ASSIGN TASKS")
         print("-"*40)
         
-        # Simple automatic task assignment for prototype
-        task_counts = {"Scavenge": 0, "Hunt": 0, "Gather": 0, "Farm": 0, "Build": 0, "Rest": 0}
-        
-        # Player chooses (simplified)
-        print("\nChoose tasks for each survivor:")
-        print("1. Scavenge - Find supplies in wasteland (risky)")
-        print("2. Hunt - Hunt wild game (medium risk)")
-        print("3. Gather - Collect berries, wood (safe)")
-        print("4. Farm - Grow food (slow but steady)")
-        print("5. Build - Construct/upgrade (needs materials)")
-        print("6. Rest - Recover stamina/health")
-        
-        # For prototype, auto-assign based on available workers
-        assignments = []
-        for s in game.survivors:
-            if game.food < 15:
-                if s.skills["Hunting"] > 20:
-                    task = "Hunt"
-                else:
-                    task = "Gather"
-            elif game.materials < 8:
-                task = "Gather"
-            elif random.random() < 0.5:
-                task = random.choice(["Scavenge", "Hunt", "Gather"])
-            else:
-                task = random.choice(["Farm", "Rest", "Gather"])
-            
-            task_counts[task] += 1
-            assignments.append((s, task))
-            print(f"  {s.name}: {task}")
-        
-        print("\n...the day passes...")
-        time.sleep(1)
-        
-        # Execute tasks
-        print("\n" + "-"*40)
-        print("DAILY ACTIVITIES")
-        print("-"*40)
-        
-        for survivor, task in assignments:
+        for survivor in game.survivors:
             if survivor.health <= 0:
                 continue
-                
+            
+            task, skill = get_job_choice(survivor)
+            survivor.job = task
+            
+            # Execute task
             if task == "Scavenge":
-                scavenge(survivor, game)
+                survivor.stamina -= 20
+                do_scavenge(survivor, game)
             elif task == "Hunt":
-                hunt(survivor, game)
+                survivor.stamina -= 25
+                do_hunt(survivor, game)
             elif task == "Gather":
-                gather(survivor, game)
+                survivor.stamina -= 15
+                do_gather(survivor, game)
             elif task == "Farm":
-                farm(survivor, game)
+                survivor.stamina -= 15
+                do_farm(survivor, game)
             elif task == "Build":
-                build(survivor, game)
+                survivor.stamina -= 20
+                do_build(survivor, game)
+            elif task == "Cook":
+                survivor.stamina -= 10
+                do_cook(survivor, game)
             elif task == "Rest":
-                rest(survivor, game)
+                do_rest(survivor, game)
+            elif task == "Guard":
+                survivor.stamina -= 15
+                do_guard(survivor, game)
         
-        # Consume food/water
-        food_consumed = len([s for s in game.survivors if s.health > 0]) * 2
-        game.food -= food_consumed
-        print(f"\nSurvivors ate {food_consumed} food.")
+        # Consume food
+        food_needed = len([s for s in game.survivors if s.health > 0]) * 2
+        game.food -= food_needed
+        print(f"\n\nSurvivors ate {food_needed} food.")
         
-        # Night events
+        # Random events
         print("\n" + "-"*40)
         print("NIGHT EVENTS")
         print("-"*40)
         
         event_roll = random.randint(1, 100)
         
-        if event_roll < 10:
-            print("A cold rain fell all night. Everyone is miserable.")
-            for s in game.survivors:
-                s.mood = "Anxious" if s.mood != "Depressed" else "Sad"
+        if event_roll < 5:
+            print("A survivor had a nightmare!")
+            victim = random.choice([s for s in game.survivors if s.health > 0])
+            victim.happiness -= 10
+        elif event_roll < 10:
+            print("Found hidden stashes!")
+            game.food += random.randint(3, 8)
         elif event_roll < 15:
-            survivor = random.choice(game.survivors)
-            print(f"{survivor.name} had a nightmare about the old world.")
-            survivor.stress += 10
+            print("Someone got sick!")
+            victim = random.choice([s for s in game.survivors if s.health > 0])
+            victim.health -= 15
+            if random.random() < 0.3:
+                victim.injuries.append("Sick")
         elif event_roll < 20:
-            found_food = random.randint(1, 3)
-            game.food += found_food
-            print(f"In the night, someone found {found_food} food hidden in their pocket!")
+            print("Good weather! Everyone rested well.")
+            for s in game.survivors:
+                s.happiness += 5
         
-        # Update day
+        # Remove dead
+        game.survivors = [s for s in game.survivors if s.health > 0]
+        
+        # Advance day
         game.day += 1
         
         # Check game over
         if check_game_over(game):
             game.game_over = True
         
-        # Brief pause
-        time.sleep(0.5)
+        # Continue?
+        if not game.game_over:
+            cont = input("\nPress Enter for next day (q to quit): ")
+            if cont.lower() == 'q':
+                print("\nYou abandoned the settlement. Goodbye!")
+                break
+    
+    print("\n" + "="*50)
+    print(f"GAME OVER - You survived {game.day} days!")
+    print("="*50)
 
 if __name__ == "__main__":
     main()
