@@ -1,18 +1,19 @@
 """
-OUTPOST ZERO - Playable Prototype
-A survival colony sim - BUILD AND PLAY
+OUTPOST ZERO - Colony Survival Sim
+VERSION 2 - More Features!
 """
 
 import random
 import time
-import os
-import sys
 
 # ==================== GAME STATE ====================
 
 class Game:
     def __init__(self):
         self.day = 1
+        self.season = "Spring"
+        self.weather = "Clear"
+        self.temperature = 65
         self.food = 30
         self.water = 30
         self.materials = 15
@@ -31,6 +32,41 @@ class Game:
             self.survivors.append(survivor)
             return True
         return False
+    
+    def update_weather(self):
+        """Update weather based on season"""
+        season_temps = {
+            "Spring": (45, 70),
+            "Summer": (60, 85),
+            "Fall": (35, 60),
+            "Winter": (10, 35)
+        }
+        
+        low, high = season_temps[self.season]
+        self.temperature = random.randint(low, high)
+        
+        # Weather
+        weather_roll = random.randint(1, 100)
+        if weather_roll < 60:
+            self.weather = "Clear"
+        elif weather_roll < 75:
+            self.weather = "Cloudy"
+        elif weather_roll < 85:
+            self.weather = "Rain"
+        elif weather_roll < 92:
+            self.weather = "Cold"
+        elif weather_roll < 97:
+            self.weather = "Storm"
+        else:
+            self.weather = "Fog"
+    
+    def update_season(self):
+        """Advance seasons"""
+        day_in_season = (self.day - 1) % 30
+        if day_in_season == 0 and self.day > 1:
+            seasons = ["Spring", "Summer", "Fall", "Winter"]
+            current = seasons.index(self.season)
+            self.season = seasons[(current + 1) % 4]
 
 # ==================== CHARACTERS ====================
 
@@ -46,7 +82,7 @@ class Survivor:
         self.stamina = 100
         self.happiness = 50  # 0-100
         
-        # Skills (1-100)
+        # Skills
         self.skills = {
             "Scavenging": random.randint(10, 25),
             "Hunting": random.randint(10, 25),
@@ -72,12 +108,15 @@ class Survivor:
         
         # Status
         self.injuries = []
+        self.sickness = None
         self.is_alive = True
         
     def __str__(self):
         status = f"{self.name} | HP:{self.health} ST:{self.stamina} HAPP:{self.happiness}"
         if self.injuries:
             status += f" [{', '.join(self.injuries)}]"
+        if self.sickness:
+            status += f" [{self.sickness}]"
         return status
 
 # ==================== CREATE CHARACTERS ====================
@@ -119,44 +158,72 @@ def create_starting_characters():
 
 # ==================== ACTIONS ====================
 
+def get_skill_bonus(survivor, task_skill):
+    """Calculate skill bonus including happiness"""
+    skill = survivor.skills[task_skill]
+    
+    # Happiness modifier
+    if survivor.happiness > 70:
+        bonus = 15
+    elif survivor.happiness > 50:
+        bonus = 5
+    elif survivor.happiness > 30:
+        bonus = -10
+    else:
+        bonus = -25
+    
+    # Weather modifier
+    weather = game.weather if 'game' in dir() else "Clear"
+    if weather == "Rain":
+        bonus -= 10
+    elif weather == "Storm":
+        bonus -= 20
+    elif weather == "Cold":
+        bonus -= 15
+    
+    return skill + bonus
+
 def do_scavenge(survivor, game):
-    """Scavenge in dangerous areas"""
-    skill = survivor.skills["Scavenging"]
+    skill = get_skill_bonus(survivor, "Scavenging")
     roll = random.randint(1, 100)
     result = skill + roll
     
     print(f"\n  {survivor.name} goes scavenging...")
     
-    if result > 100:  # Amazing
+    if result > 100:
         found = random.sample(["food", "materials", "medicine", "ammo", "scrap", "book"], 3)
         for item in found:
             add_item(item, game, 1)
         print(f"    AMAZING! Found: {', '.join(found)}")
-    elif result > 70:  # Good
+    elif result > 70:
         found = random.sample(["food", "materials", "medicine", "scrap"], 2)
         for item in found:
             add_item(item, game, 1)
         print(f"    Good haul: {', '.join(found)}")
-    elif result > 40:  # OK
+    elif result > 40:
         found = random.choice(["food", "materials", "scrap"])
         add_item(found, game, 1)
         print(f"    Found: {found}")
-    else:  # Bad
+    else:
         if random.random() < 0.25:
             injury = random.choice(["Cut", "Bruise"])
             survivor.injuries.append(injury)
             survivor.health -= 15
             print(f"    BAD! Got injured: {injury} (-15 HP)")
+            survivor.happiness -= 5
         else:
             print(f"    Found nothing.")
 
 def do_hunt(survivor, game):
-    """Hunt for food"""
-    skill = survivor.skills["Hunting"]
+    skill = get_skill_bonus(survivor, "Hunting")
     roll = random.randint(1, 100)
     result = skill + roll
     
     print(f"\n  {survivor.name} goes hunting...")
+    
+    if game.weather == "Rain":
+        print(f"    Hard to hunt in the rain!")
+        result -= 30
     
     if result > 80:
         game.food += 15
@@ -174,9 +241,7 @@ def do_hunt(survivor, game):
             print(f"    Wolf attack! -10 HP")
 
 def do_gather(survivor, game):
-    """Gather berries, wood, herbs"""
-    skill = survivor.skills["Gathering"]
-    roll = random.randint(1, 100)
+    skill = get_skill_bonus(survivor, "Gathering")
     
     print(f"\n  {survivor.name} goes gathering...")
     
@@ -200,15 +265,25 @@ def do_gather(survivor, game):
         print(f"    Found nothing useful.")
 
 def do_farm(survivor, game):
-    """Farm crops"""
-    skill = survivor.skills["Farming"]
+    skill = get_skill_bonus(survivor, "Farming")
     roll = skill + random.randint(1, 100)
     
     print(f"\n  {survivor.name} works on the farm...")
     
-    if "Farm" not in game.buildings:
+    if "Farm" not in game.buildings and "Greenhouse" not in game.buildings:
         print(f"    No farm! Can't farm.")
         return
+    
+    # Weather affects farming
+    weather_mod = 0
+    if game.weather == "Rain":
+        weather_mod = 10
+    elif game.weather == "Storm":
+        weather_mod = -20
+    elif game.weather == "Clear":
+        weather_mod = 10
+    
+    roll += weather_mod
     
     if roll > 60:
         food_gain = random.randint(5, 12)
@@ -222,8 +297,7 @@ def do_farm(survivor, game):
         print(f"    Poor harvest this time.")
 
 def do_build(survivor, game):
-    """Build something"""
-    skill = survivor.skills["Building"]
+    skill = get_skill_bonus(survivor, "Building")
     
     print(f"\n  {survivor.name} tries to build...")
     
@@ -232,11 +306,12 @@ def do_build(survivor, game):
         return
     
     if skill + random.randint(1, 100) > 50:
-        building = random.choice(["Workshop", "Well", "Chicken Coop", "Greenhouse", "Pen"])
+        building = random.choice(["Workshop", "Well", "Chicken Coop", "Greenhouse", "Pen", "Smokehouse"])
         if building not in game.buildings:
             game.buildings[building] = 1
             game.materials -= 10
             print(f"    Built {building}!")
+            survivor.happiness += 5
         else:
             game.buildings[building] += 1
             game.materials -= 10
@@ -246,10 +321,17 @@ def do_build(survivor, game):
         print(f"    Made some progress. Used 3 materials.")
 
 def do_rest(survivor, game):
-    """Rest and recover"""
     print(f"\n  {survivor.name} rests...")
-    heal = random.randint(10, 20)
-    stamina = random.randint(20, 35)
+    
+    # Weather affects rest
+    if game.weather == "Storm":
+        print(f"    Storm kept them awake...")
+        heal = random.randint(5, 10)
+        stamina = random.randint(10, 20)
+    else:
+        heal = random.randint(10, 20)
+        stamina = random.randint(20, 35)
+    
     survivor.health = min(100, survivor.health + heal)
     survivor.stamina = min(100, survivor.stamina + stamina)
     print(f"    +{heal} HP, +{stamina} Stamina")
@@ -258,27 +340,36 @@ def do_rest(survivor, game):
     if survivor.injuries and random.random() < 0.3:
         recovered = survivor.injuries.pop()
         print(f"    Healed: {recovered}")
+    
+    # Sickness check
+    if survivor.sickness:
+        if random.random() < 0.3:
+            survivor.sickness = None
+            print(f"    Recovered from {survivor.sickness}!")
+            survivor.sickness = None
 
 def do_cook(survivor, game):
-    """Cook food (requires Kitchen)"""
+    skill = get_skill_bonus(survivor, "Cooking")
+    
     print(f"\n  {survivor.name} cooks...")
     
     if game.food < 5:
         print(f"    Not enough food to cook!")
         return
     
-    # Better food with cooking skill
-    bonus = survivor.skills["Cooking"] // 20
+    bonus = skill // 20
     food_made = 4 + bonus
     
-    if random.random() < 0.3:
+    if random.random() < 0.3 + (bonus * 0.1):
         # Special meal!
         game.food -= 3
         game.food += food_made + 3
-        print(f"    Made a special meal! +{food_made + 3} food (better)")
-        # Happiness boost
+        print(f"    Made a special meal! +{food_made + 3} food")
+        
+        # Happiness boost for everyone
         for s in game.survivors:
-            if s.favorite_food in ["Meat", "Fish"]:
+            s.happiness += 5
+            if s.favorite_food == "Meat" or s.favorite_food == "Fish":
                 s.happiness += 5
     else:
         game.food -= 3
@@ -286,18 +377,26 @@ def do_cook(survivor, game):
         print(f"    Cooked: +{food_made} food")
 
 def do_guard(survivor, game):
-    """Guard the settlement"""
+    skill = get_skill_bonus(survivor, "Combat")
+    
     print(f"\n  {survivor.name} stands guard...")
     
-    # Random enemy encounter
-    if random.random() < 0.2:
-        enemy = random.choice(["wolf", "zombie", "raider"])
+    # Weather affects encounters
+    encounter_chance = 0.2
+    if game.weather == "Fog":
+        encounter_chance = 0.35
+    elif game.weather == "Storm":
+        encounter_chance = 0.1
+    
+    if random.random() < encounter_chance:
+        enemy = random.choice(["wolf", "zombie", "raider", "zombie dog"])
         print(f"    ENEMY! A {enemy} approaches!")
         
-        combat_roll = survivor.skills["Combat"] + random.randint(1, 100)
+        combat_roll = skill + random.randint(1, 100)
         
         if combat_roll > 60:
             print(f"    {survivor.name} defeated the {enemy}!")
+            survivor.happiness += 5
             if random.random() < 0.3:
                 loot = random.choice(["ammo", "medicine", "food"])
                 add_item(loot, game, 1)
@@ -306,6 +405,7 @@ def do_guard(survivor, game):
             damage = random.randint(10, 25)
             survivor.health -= damage
             print(f"    {survivor.name} took {damage} damage!")
+            survivor.happiness -= 10
             if random.random() < 0.2:
                 survivor.injuries.append("Wound")
     else:
@@ -347,7 +447,7 @@ def check_game_over(game):
 
 def print_status(game):
     print(f"\n{'='*50}")
-    print(f"DAY {game.day} - {game.survivors[0].profession}'s Settlement")
+    print(f"DAY {game.day} - {game.season} - {game.weather} {game.temperature}F")
     print(f"{'='*50}")
     print(f"\nRESOURCES:")
     print(f"  Food: {game.food}  Water: {game.water}  Scrap: {game.scrap}")
@@ -363,6 +463,8 @@ def print_status(game):
             print(f"  {mood} {s.name}: {s.job} | HP:{s.health} ST:{s.stamina} HAPP:{s.happiness}")
             if s.injuries:
                 print(f"      INJURIES: {', '.join(s.injuries)}")
+            if s.sickness:
+                print(f"      SICK: {s.sickness}")
 
 def get_job_choice(survivor):
     jobs = [
@@ -397,9 +499,11 @@ def get_job_choice(survivor):
 # ==================== MAIN GAME ====================
 
 def main():
+    global game
+    
     print("="*60)
     print("         OUTPOST ZERO")
-    print("   A Colony Survival Simulator")
+    print("   Colony Survival Simulator v2.0")
     print("="*60)
     print()
     
@@ -407,12 +511,20 @@ def main():
     game = Game()
     game.survivors = create_starting_characters()
     
+    # Set up some initial relationships
+    game.survivors[0].relationships["Sarah"] = 20  # Marcus likes Sarah
+    game.survivors[1].relationships["Marcus"] = 15  # Sarah likes Marcus
+    
     print("Your group of 4 survivors has settled in an old farmhouse.")
     print("You have the 'Gardening Basics' book.")
     print("Day 1 begins...\n")
     
     # Main game loop
     while not game.game_over:
+        # Update weather
+        game.update_season()
+        game.update_weather()
+        
         print_status(game)
         
         # Check starvation
@@ -455,9 +567,19 @@ def main():
             elif task == "Guard":
                 survivor.stamina -= 15
                 do_guard(survivor, game)
+            
+            # Check death
+            if survivor.health <= 0:
+                print(f"\n💀 {survivor.name} has died!")
+                survivor.is_alive = False
+                # Sadness for others
+                for s in game.survivors:
+                    if s != survivor and s.is_alive:
+                        s.happiness -= 15
         
         # Consume food
-        food_needed = len([s for s in game.survivors if s.health > 0]) * 2
+        alive = len([s for s in game.survivors if s.is_alive and s.health > 0])
+        food_needed = alive * 2
         game.food -= food_needed
         print(f"\n\nSurvivors ate {food_needed} food.")
         
@@ -470,24 +592,53 @@ def main():
         
         if event_roll < 5:
             print("A survivor had a nightmare!")
-            victim = random.choice([s for s in game.survivors if s.health > 0])
+            victim = random.choice([s for s in game.survivors if s.is_alive and s.health > 0])
             victim.happiness -= 10
         elif event_roll < 10:
             print("Found hidden stashes!")
             game.food += random.randint(3, 8)
         elif event_roll < 15:
             print("Someone got sick!")
-            victim = random.choice([s for s in game.survivors if s.health > 0])
+            victim = random.choice([s for s in game.survivors if s.is_alive and s.health > 0])
+            victim.sickness = random.choice(["Cold", "Flu", "Food Poisoning"])
             victim.health -= 15
-            if random.random() < 0.3:
-                victim.injuries.append("Sick")
+            print(f"    {victim.name} has {victim.sickness}!")
         elif event_roll < 20:
             print("Good weather! Everyone rested well.")
             for s in game.survivors:
-                s.happiness += 5
+                if s.is_alive:
+                    s.happiness += 5
+        elif event_roll < 25:
+            print("Two survivors had a chat...")
+            s1, s2 = random.sample([s for s in game.survivors if s.is_alive], 2)
+            change = random.randint(-5, 15)
+            s1.relationships[s2.name] = s1.relationships.get(s2.name, 0) + change
+            s2.relationships[s1.name] = s2.relationships.get(s1.name, 0) + change
+            print(f"    {s1.name} and {s2.name} got along {'well' if change > 0 else 'poorly'}!")
+        
+        # Weather effects
+        if game.weather == "Storm":
+            print("A storm rages outside!")
+            for s in game.survivors:
+                if s.is_alive and s.job != "Guard":
+                    s.happiness -= 5
+        elif game.weather == "Fog":
+            print("Thick fog surrounds the settlement...")
+        
+        # Temperature effects
+        if game.temperature < 32:
+            print("Freezing cold! Need warmth or people will suffer.")
+            for s in game.survivors:
+                if s.is_alive and s.job == "Guard":
+                    s.health -= 5
+        elif game.temperature > 85:
+            print("Scorching heat!")
+            for s in game.survivors:
+                if s.is_alive:
+                    s.stamina -= 10
         
         # Remove dead
-        game.survivors = [s for s in game.survivors if s.health > 0]
+        game.survivors = [s for s in game.survivors if s.is_alive]
         
         # Advance day
         game.day += 1
