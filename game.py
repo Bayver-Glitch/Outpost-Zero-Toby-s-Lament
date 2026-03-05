@@ -1,148 +1,167 @@
 """
 OUTPOST ZERO - Colony Survival Sim
-VERSION 3.1 - Extended Traits (Positive & Negative)
+VERSION 4.0 - Tools, Professions, New Stats
 """
 
 import random
-import time
 
-# ==================== TRAIT DATABASE ====================
+# ==================== DIFFICULTY ====================
 
-# Positive traits: (name, category, effect_description, stat_bonuses)
+DIFFICULTY = "normal"  # easy, normal, hard
+
+# ==================== TRAITS ====================
+
 POSITIVE_TRAITS = {
     # Moral
-    "Honesty": ("moral", "Trustworthy", {"relationship_trust": 20}),
-    "Integrity": ("moral", "Principled", {"reputation_good": 10}),
-    "Kindness": ("moral", "Compassionate", {"nearby_happiness": 5}),
-    "Generosity": ("moral", "Giving", {"gift_events": True}),
-    "Fairness": ("moral", "Just", {"reputation_order": 10}),
-    "Forgiveness": ("moral", "Understanding", {"betrayal_recovery": 1.5}),
-    
+    "Honest": {"category": "moral", "effect": {"relationship_trust": 20}},
+    "Generous": {"category": "moral", "effect": {"gift_events": True}},
+    "Kind": {"category": "moral", "effect": {"nearby_happiness": 5}},
+    "Fair": {"category": "moral", "effect": {"reputation_order": 10}},
+    "Loyal": {"category": "moral", "effect": {"betrayal_chance": 0}},
     # Emotional
-    "Optimist": ("emotional", "Hopeful", {"negative_event_mod": -1}),
-    "Resilient": ("emotional", "Tough-minded", {"stress_recovery": 1.5}),
-    "Joyfulness": ("emotional", "Cheerful", {"daily_happiness": 5}),
-    "Empathetic": ("emotional", "Understanding", {"mood_contagion": 1.25}),
-    "Compassionate": ("emotional", "Caring", {"heal_events": True}),
-    "Calm": ("emotional", "Level-headed", {"stress_from_events": 0.75}),
-    
+    "Optimist": {"category": "emotional", "effect": {"negative_event_mod": -1}},
+    "Cheerful": {"category": "emotional", "effect": {"daily_happiness": 5}},
+    "Calm": {"category": "emotional", "effect": {"stress_from_events": 0.75}},
+    "Empathetic": {"category": "emotional", "effect": {"mood_contagion": 1.25}},
+    "Resilient": {"category": "emotional", "effect": {"stress_recovery": 1.5}},
     # Social
-    "Loyal": ("social", "Faithful", {"betrayal_chance": 0}),
-    "Charismatic": ("social", "Charming", {"new_relationship": 25}),
-    "Tactful": ("social", "Diplomatic", {"relationship_damage": 0.5}),
-    "Open-Minded": ("social", "Accepting", {"learning_speed": 1.25}),
-    "Humble": ("social", "Modest", {"accepts_help": True}),
-    "Reliable": ("social", "Dependable", {"task_completion": 1.20}),
-    
-    # Work Ethic
-    "Diligent": ("work", "Hardworking", {"work_output": 1.15}),
-    "Disciplined": ("work", "Focused", {"stamina_use": 0.75}),
-    "Perseverant": ("work", "Persistent", {"never_gives_up": True}),
-    "Creative": ("work", "Innovative", {"special_discovery": 10}),
-    "Enthusiastic": ("work", "Passionate", {"interested_work_quality": 1.10}),
-    "Resourceful": ("work", "Clever", {"problem_solving": 15}),
-    
+    "Charismatic": {"category": "social", "effect": {"new_relationship": 25}},
+    "Tactful": {"category": "social", "effect": {"relationship_damage": 0.5}},
+    "Reliable": {"category": "social", "effect": {"task_completion": 1.20}},
+    "Humble": {"category": "social", "effect": {"accepts_help": True}},
+    # Work
+    "Diligent": {"category": "work", "effect": {"work_output": 1.15}},
+    "Disciplined": {"category": "work", "effect": {"stamina_use": 0.75}},
+    "Perseverant": {"category": "work", "effect": {"never_gives_up": True}},
+    "Creative": {"category": "work", "effect": {"special_discovery": 10}},
+    "Enthusiastic": {"category": "work", "effect": {"interested_work_quality": 1.10}},
     # Combat
-    "Courageous": ("combat", "Brave", {"combat_damage": 1.20}),
-    "Tactical": ("combat", "Strategic", {"combat_advantage": 15}),
-    "Stealthy": ("combat", "Sneaky", {"sneak_success": 25}),
-    "Protective": ("combat", "Defensive", {"ally_defense": 15}),
-    "Vigilant": ("combat", "Alert", {"danger_detection": 25}),
-    "Daring": ("combat", "Bold", {"risk_success": 15}),
-    
+    "Courageous": {"category": "combat", "effect": {"combat_damage": 1.20}},
+    "Tactical": {"category": "combat", "effect": {"combat_advantage": 15}},
+    "Stealthy": {"category": "combat", "effect": {"sneak_success": 25}},
+    "Protective": {"category": "combat", "effect": {"ally_defense": 15}},
+    "Vigilant": {"category": "combat", "effect": {"danger_detection": 25}},
     # Health
-    "Tough": ("health", "Hardy", {"damage_taken": 0.75}),
-    "Fast Healer": ("health", "Quick Recovery", {"healing_rate": 2.0}),
-    "Pain Resistant": ("health", "Stoic", {"pain_effects": 0.5}),
-    "Athletic": ("health", "Fit", {"stamina": 1.15}),
-    "Healthy": ("health", "Robust", {"illness_chance": 0.5}),
-    "Enduring": ("health", "Stamina", {"stamina_cap": 1.20}),
-    
-    # Intellect
-    "Wise": ("intellect", "Judicious", {"learn_from_mistakes": 1.25}),
-    "Curious": ("intellect", "Inquisitive", {"exploration_yield": 1.25}),
-    "Intelligent": ("intellect", "Smart", {"skill_gain": 1.20}),
-    "Adaptable": ("intellect", "Flexible", {"new_situation": 1.25}),
-    "Focused": ("intellect", "Concentrated", {"distraction": 0.5}),
-    "Knowledgeable": ("intellect", "Learned", {"teaching_efficiency": 1.25}),
-    
-    # Social Flaws (actually positive)
-    "Modest": ("social", "Humble", {"arrogance_check": True}),
+    "Tough": {"category": "health", "effect": {"damage_taken": 0.75}},
+    "Fast Healer": {"category": "health", "effect": {"healing_rate": 2.0}},
+    "Pain Resistant": {"category": "health", "effect": {"pain_effects": 0.5}},
+    "Athletic": {"category": "health", "effect": {"stamina": 1.15}},
+    "Healthy": {"category": "health", "effect": {"illness_chance": 0.5}},
 }
 
-# Negative traits: (name, category, effect_description, stat_penalties)
 NEGATIVE_TRAITS = {
     # Moral
-    "Dishonest": ("moral", "Deceptive", {"relationship_trust": -20}),
-    "Manipulative": ("moral", "Scheming", {"deception_success": 20}),
-    "Cruel": ("moral", "Callous", {"nearby_happiness": -5}),
-    "Vindictive": ("moral", "revengeful", {"forgiveness": 0}),
-    "Hypocritical": ("moral", "Two-faced", {"trust_decay": 1.5}),
-    "Ingrateful": ("moral", "Unthankful", {"gift_happiness": -5}),
-    
+    "Dishonest": {"category": "moral", "effect": {"relationship_trust": -20}},
+    "Selfish": {"category": "moral", "effect": {"share_chance": 0}},
+    "Cruel": {"category": "moral", "effect": {"nearby_happiness": -5}},
+    "Vindictive": {"category": "moral", "effect": {"forgiveness": 0}},
     # Emotional
-    "Pessimist": ("emotional", "Negative", {"negative_event_mod": 1}),
-    "Melancholic": ("emotional", "Sad", {"daily_happiness": -3}),
-    "Anxious": ("emotional", "Worried", {"stress_from_events": 1.5}),
-    "Irritable": ("emotional", "Short-fused", {"mood_contagion": 1.25}),
-    "Nervous": ("emotional", "Jumpy", {"calm_check_fail": True}),
-    "Moody": ("emotional", "Unpredictable", {"happiness_volatility": 1.5}),
-    
+    "Pessimist": {"category": "emotional", "effect": {"negative_event_mod": 1}},
+    "Melancholic": {"category": "emotional", "effect": {"daily_happiness": -3}},
+    "Anxious": {"category": "emotional", "effect": {"stress_from_events": 1.5}},
+    "Moody": {"category": "emotional", "effect": {"happiness_volatility": 1.5}},
+    "Irritable": {"category": "emotional", "effect": {"mood_contagion": 1.25}},
     # Social
-    "Arrogant": ("social", "Conceited", {"rejects_help": True}),
-    "Rude": ("social", "Impolite", {"relationship_damage": 1.25}),
-    "Selfish": ("social", "Self-centered", {"share_chance": 0}),
-    "Stubborn": ("social", "Obstinate", {"accepts_advice": False}),
-    "Cynical": ("social", "Distrustful", {"new_relationship": -15}),
-    "Dismissive": ("social", "Dismissive", {"teaching_accept": 0.5}),
-    
-    # Work Ethic
-    "Lazy": ("work", "Idle", {"work_output": 0.75}),
-    "Slacker": ("work", "Unreliable", {"task_completion": 0.75}),
-    "Procrastinator": ("work", "Delayer", {"work_efficiency": 0.85}),
-    "Impulsive": ("work", "Hasty", {"mistake_chance": 1.25}),
-    "Careless": ("work", "Negligent", {"accident_chance": 1.5}),
-    "Unmotivated": ("work", "Listless", {"voluntary_work": False}),
-    
+    "Arrogant": {"category": "social", "effect": {"rejects_help": True}},
+    "Rude": {"category": "social", "effect": {"relationship_damage": 1.25}},
+    "Selfish": {"category": "social", "effect": {"share_chance": 0}},
+    "Cynical": {"category": "social", "effect": {"new_relationship": -15}},
+    "Stubborn": {"category": "social", "effect": {"accepts_advice": False}},
+    # Work
+    "Lazy": {"category": "work", "effect": {"work_output": 0.75}},
+    "Slacker": {"category": "work", "effect": {"task_completion": 0.75}},
+    "Procrastinator": {"category": "work", "effect": {"work_efficiency": 0.85}},
+    "Careless": {"category": "work", "effect": {"accident_chance": 1.5}},
+    "Unmotivated": {"category": "work", "effect": {"voluntary_work": False}},
     # Combat
-    "Cowardly": ("combat", "Fearful", {"combat_damage": 0.75}),
-    "Reckless": ("combat", "Careless", {"self_damage": 1.5}),
-    "Aggressive": ("combat", "Hostile", {"friendly_fire": 1.5}),
-    "Hesitant": ("combat", "Indecisive", {"missed_attacks": 1.25}),
-    "Panicky": ("combat", "Frightened", {"retreat_chance": 1.5}),
-    
+    "Cowardly": {"category": "combat", "effect": {"combat_damage": 0.75}},
+    "Reckless": {"category": "combat", "effect": {"self_damage": 1.5}},
+    "Aggressive": {"category": "combat", "effect": {"friendly_fire": 1.5}},
     # Health
-    "Fragile": ("health", "Frail", {"damage_taken": 1.25}),
-    "Slow Healer": ("health", "Poor Recovery", {"healing_rate": 0.5}),
-    "Sickly": ("health", "Ailing", {"illness_chance": 1.5}),
-    "Allergic": ("health", "Reactive", {"allergy_events": True}),
-    "Addicted": ("health", "Dependent", {"withdrawal_effects": True}),
-    "Claustrophobic": ("health", "Crowd-fearing", {"stress_in_crowds": 1.5}),
-    
+    "Fragile": {"category": "health", "effect": {"damage_taken": 1.25}},
+    "Sickly": {"category": "health", "effect": {"illness_chance": 1.5}},
+    "Slow Healer": {"category": "health", "effect": {"healing_rate": 0.5}},
     # Intellect
-    "Naive": ("intellect", "Gullible", {"deception_vulnerability": 1.5}),
-    "Forgetful": ("intellect", "Absent-minded", {"skill_decay": 1.25}),
-    "Slow": ("intellect", "Dim", {"learning_speed": 0.75}),
-    "Obsessed": ("intellect", "Fixated", {"balanced_judgment": False}),
-    "Narrow-Minded": ("intellect", "Closed", {"new_idea_acceptance": 0.5}),
-    "Confused": ("intellect", "Bewildered", {"decision_quality": 0.75}),
-    
-    # Other Flaws
-    "Envious": ("flaw", "Jealous", {"jealousy_events": True}),
-    "Greedy": ("flaw", "Acquisitive", {"hoarding": True}),
-    "Jealous": ("flaw", "Resentful", {"happy_nearby_sad": True}),
-    "Wrathful": ("flaw", "Angry", {"anger_events": True}),
-    "Prideful": ("flaw", "Haughty", {"accepts_criticism": False}),
-    "Lustful": ("flaw", "Obsessed", {"romance_distraction": True}),
-    "Gluttonous": ("flaw", "Overeater", {"food_consumption": 1.5}),
-    "Flaky": ("flaw", "Unreliable", {"commitment_keep": 0.5}),
-    "Defensive": ("flaw", "Thin-skinned", {"criticism_effect": 1.5}),
-    "Indecisive": ("flaw", "Hesitant", {"decision_time": 1.5}),
-    "Apathetic": ("flaw", "Unconcerned", {"event_response": 0.5}),
-    "Narcissistic": ("flaw", "Self-absorbed", {"self_focus": True}),
+    "Naive": {"category": "intellect", "effect": {"deception_vulnerability": 1.5}},
+    "Forgetful": {"category": "intellect", "effect": {"skill_decay": 1.25}},
+    "Slow": {"category": "intellect", "effect": {"learning_speed": 0.75}},
 }
 
-ALL_TRAITS = {**POSITIVE_TRAITS, **NEGATIVE_TRAITS}
+# Skill-specific traits
+SKILL_TRAITS = {
+    "Farming": ["Green Thumb", "Farm Hand", "Botanist", "Harvest King"],
+    "Cooking": ["Chef's Kiss", "Spice Master", "Preserver", "Baker"],
+    "Scavenging": ["Scavenger", "Looter", "Quick Hands", "Expert Finder"],
+    "Hunting": ["Marksman", "Tracker", "Trapper", "Beastmaster"],
+    "Combat": ["Warrior", "Fighter", "Brawler", "Berserker"],
+    "Medical": ["Healer", "Surgeon", "Medic", "Herbalist"],
+    "Building": ["Builder", "Architect", "Craftsman", "Efficient"],
+    "Fishing": ["Angler", "Fisherman", "Patient", "Net Caster"],
+    "Gathering": ["Forager", "Gatherer", "Herbalist", "Hunter"],
+}
+
+# ==================== TOOLS ====================
+
+TOOLS = {
+    "tier_1": {
+        "Basic Hoe": {"skill": "Farming", "bonus": 15},
+        "Basic Rake": {"skill": "Farming", "bonus": 15},
+        "Hand Axe": {"skill": "Woodcutting", "bonus": 15},
+        "Pickaxe": {"skill": "Mining", "bonus": 20},
+        "Shovel": {"skill": "Digging", "bonus": 15},
+        "Hammer": {"skill": "Building", "bonus": 15},
+        "Saw": {"skill": "Carpentry", "bonus": 20},
+        "Knife": {"skill": "Skinning", "bonus": 15},
+    },
+    "tier_2": {
+        "Quality Hoe": {"skill": "Farming", "bonus": 30},
+        "Quality Axe": {"skill": "Woodcutting", "bonus": 30},
+        "Crosscut Saw": {"skill": "Carpentry", "bonus": 35},
+        "Anvil": {"skill": "Blacksmithing", "bonus": 40},
+        "Forge Hammer": {"skill": "Blacksmithing", "bonus": 35},
+    },
+    "tier_3": {
+        "Medical Kit": {"skill": "Medical", "bonus": 35},
+        "Surgical Kit": {"skill": "Medical", "bonus": 50},
+    },
+}
+
+# ==================== BUILDINGS: TECH 1 ====================
+
+TECH_1_BUILDINGS = {
+    # Shelter
+    "Lean-to": {"cost": {"scrap": 5, "wood": 10}, "comfort": 2},
+    "Scrap Hut": {"cost": {"scrap": 10, "wood": 5}, "comfort": 5},
+    "Shared Quarters": {"cost": {"scrap": 10, "wood": 15, "cloth": 2}, "comfort": 5, "capacity": 4},
+    # Food
+    "Basic Garden": {"cost": {"wood": 5}, "produces": "food"},
+    "Smokehouse": {"cost": {"scrap": 5, "wood": 15, "stone": 5}, "produces": "preserve"},
+    "Root Cellar": {"cost": {"wood": 10}, "produces": "storage_food"},
+    "Basic Kitchen": {"cost": {"scrap": 10, "wood": 10}, "produces": "cooking"},
+    "Outdoor Fire Pit": {"cost": {"stone": 5, "wood": 5}, "produces": "cooking"},
+    # Water
+    "Rain Barrel": {"cost": {"scrap": 3}, "produces": "water"},
+    "Dirty Well": {"cost": {"stone": 10}, "produces": "water"},
+    "Boiling Station": {"cost": {"stone": 5}, "produces": "water_purify"},
+    "Water Storage": {"cost": {"scrap": 5}, "produces": "water_storage"},
+    # Defense
+    "Scrap Wall": {"cost": {"scrap": 10}, "hp": 20},
+    "Wooden Picket": {"cost": {"wood": 10}, "hp": 15},
+    "Scrap Gate": {"cost": {"scrap": 15, "wood": 5}, "hp": 15},
+    "Makeshift Tower": {"cost": {"scrap": 15, "wood": 10}, "hp": 25, "bonus": "spotting"},
+    # Storage
+    "Scrap Storage": {"cost": {"scrap": 10}, "slots": 20},
+    "Wooden Crate": {"cost": {"wood": 8}, "slots": 10},
+    # Workshop
+    "Basic Workbench": {"cost": {"scrap": 5, "wood": 10}, "produces": "crafting"},
+    # Medical
+    "First Aid Corner": {"cost": {"wood": 5}, "produces": "healing"},
+    "Sick Bay": {"cost": {"scrap": 5, "wood": 10, "cloth": 3}, "produces": "healing"},
+    # Animals
+    "Open Pen": {"cost": {"wood": 15}, "produces": "animals"},
+    # Recreation
+    "Fire Circle": {"cost": {"stone": 10}, "produces": "morale"},
+}
 
 # ==================== GAME STATE ====================
 
@@ -152,106 +171,149 @@ class Game:
         self.season = "Spring"
         self.weather = "Clear"
         self.temperature = 65
+        
+        # Resources
         self.food = 30
-        self.water = 30
-        self.materials = 15
-        self.medicine = 3
+        self.water = 20
+        self.scrap = 30
+        self.wood = 20
+        self.stone = 10
+        self.cloth = 5
+        self.medicine = 2
         self.ammo = 5
-        self.scrap = 20
         self.books = ["Gardening Basics"]
-        self.buildings = {"Farmhouse": 1, "Fire Pit": 1, "Storage": 1}
+        
+        # Tools inventory
+        self.tools = ["Hand Axe", "Knife"]  # Starting tools
+        
+        # Buildings
+        self.buildings = {
+            "Lean-to": 1,
+            "Scrap Hut": 1,
+            "Shared Quarters": 1,
+            "Basic Garden": 1,
+            "Outdoor Fire Pit": 1,
+            "Scrap Storage": 1,
+            "Scrap Wall": 2,
+            "Scrap Gate": 1,
+        }
+        
         self.survivors = []
         self.game_over = False
-        self.tech_level = 1
         self.population_cap = 10
-        self.reputation = {"good": 0, "order": 0, "wealth": 0, "danger": 0}
-        
+    
     def update_weather(self):
-        season_temps = {"Spring": (45, 70), "Summer": (60, 85), "Fall": (35, 60), "Winter": (10, 35)}
-        low, high = season_temps[self.season]
-        self.temperature = random.randint(low, high)
-        
-        roll = random.randint(1, 100)
-        if roll < 60: self.weather = "Clear"
-        elif roll < 75: self.weather = "Cloudy"
-        elif roll < 85: self.weather = "Rain"
-        elif roll < 92: self.weather = "Cold"
-        elif roll < 97: self.weather = "Storm"
-        else: self.weather = "Fog"
+        temps = {"Spring": (45, 70), "Summer": (60, 85), "Fall": (35, 60), "Winter": (10, 35)}
+        self.temperature = random.randint(*temps[self.season])
+        self.weather = random.choices(
+            ["Clear", "Cloudy", "Rain", "Cold", "Storm", "Fog"],
+            weights=[50, 15, 10, 8, 4, 3]
+        )[0]
     
     def update_season(self):
-        day_in_season = (self.day - 1) % 30
-        if day_in_season == 0 and self.day > 1:
+        if (self.day - 1) % 30 == 0 and self.day > 1:
             seasons = ["Spring", "Summer", "Fall", "Winter"]
             self.season = seasons[(seasons.index(self.season) + 1) % 4]
 
-# ==================== CHARACTERS ====================
+# ==================== SURVIVOR ====================
 
 class Survivor:
-    def __init__(self, name, age, sex, profession="Survivor"):
+    def __init__(self, name, profession, age=30):
         self.name = name
         self.age = age
-        self.sex = sex
         self.profession = profession
         
-        # Stats
-        self.health = 100
-        self.stamina = 100
+        # New Stats (50-150)
+        if DIFFICULTY == "easy":
+            self.intellect = random.randint(80, 130)
+            self.stamina = random.randint(80, 130)
+            self.charisma = random.randint(80, 130)
+            self.health_max = random.randint(80, 130)
+        elif DIFFICULTY == "hard":
+            self.intellect = random.randint(50, 120)
+            self.stamina = random.randint(50, 120)
+            self.charisma = random.randint(50, 120)
+            self.health_max = random.randint(50, 120)
+        else:
+            self.intellect = random.randint(70, 130)
+            self.stamina = random.randint(70, 130)
+            self.charisma = random.randint(70, 130)
+            self.health_max = random.randint(70, 130)
+        
+        self.health = self.health_max
         self.happiness = 50
         
         # Skills
-        self.skills = {
-            "Scavenging": random.randint(10, 25),
-            "Hunting": random.randint(10, 25),
-            "Farming": random.randint(10, 25),
-            "Gathering": random.randint(10, 25),
-            "Building": random.randint(10, 25),
-            "Cooking": random.randint(10, 25),
-            "Fishing": random.randint(10, 25),
-            "Combat": random.randint(10, 25),
-            "Medical": random.randint(5, 15),
-            "Crafting": random.randint(10, 25),
-        }
-        
-        self.job = "Unassigned"
+        self.skills = self.get_profession_skills(profession)
         
         # Traits
         self.traits = []
-        self.trait_names = []  # For display
-        self.assign_random_traits()
+        self.skill_traits = []  # Skill-specific traits
+        self.assign_traits()
         
-        # Relationships
-        self.relationships = {}
+        # Job
+        self.job = "Unassigned"
         
+        # Status
         self.injuries = []
         self.sickness = None
         self.is_alive = True
-        
-    def assign_random_traits(self):
-        """Assign 2-4 random traits"""
-        # 1-2 positive traits
-        pos_options = list(POSITIVE_TRAITS.keys())
-        self.traits.append(random.choice(pos_options))
-        if random.random() < 0.5:
-            self.traits.append(random.choice(pos_options))
-        
-        # 1-2 negative traits  
-        neg_options = list(NEGATIVE_TRAITS.keys())
-        if random.random() < 0.7:  # 70% chance of at least one flaw
-            self.traits.append(random.choice(neg_options))
-            if random.random() < 0.4:
-                self.traits.append(random.choice(neg_options))
-        
-        self.trait_names = self.traits.copy()
     
-    def get_trait_effects(self, effect_type):
-        """Get all trait effects of a certain type"""
+    def get_profession_skills(self, profession):
+        base = {
+            "Scavenger": {"Scavenging": 30, "Gathering": 20, "Combat": 15},
+            "Hunter": {"Hunting": 35, "Tracking": 25, "Combat": 20},
+            "Farmer": {"Farming": 30, "Gathering": 15, "Building": 10},
+            "Builder": {"Building": 35, "Carpentry": 25, "Crafting": 15},
+            "Blacksmith": {"Blacksmithing": 30, "Crafting": 20, "Building": 15},
+            "Cook": {"Cooking": 35, "Preserving": 20, "Farming": 10},
+            "Doctor": {"Medical": 35, "First Aid": 25, "Herbalism": 15},
+            "Gatherer": {"Gathering": 35, "Herbalism": 25, "Farming": 15},
+            "Guard": {"Combat": 35, "Vigilance": 25, "First Aid": 10},
+            "Carpenter": {"Carpentry": 35, "Building": 25, "Crafting": 15},
+        }
+        skills = base.get(profession, {"General": 20})
+        # Add some randomness
+        for s in skills:
+            skills[s] += random.randint(-5, 10)
+        return skills
+    
+    def assign_traits(self):
+        # Get available traits based on difficulty
+        pos_options = list(POSITIVE_TRAITS.keys())
+        neg_options = list(NEGATIVE_TRAITS.keys())
+        
+        if DIFFICULTY == "easy":
+            # 2 good + 1 minor bad
+            self.traits = random.sample(pos_options, 2)
+            minor_bad = ["Lazy", "Forgetful", "Clumsy", "Flaky", "Modest"]
+            self.traits.append(random.choice(minor_bad))
+        elif DIFFICULTY == "hard":
+            # 1 good + 2 bad
+            self.traits = [random.choice(pos_options)]
+            self.traits.extend(random.sample(neg_options, 2))
+        else:
+            # Normal: 1 good + 1 bad
+            self.traits = [random.choice(pos_options), random.choice(neg_options)]
+        
+        # Skill-specific trait (50% chance normal, 75% easy, 25% hard)
+        chance = {"easy": 0.75, "normal": 0.50, "hard": 0.25}[DIFFICULTY]
+        if random.random() < chance:
+            prof = self.profession
+            if prof in SKILL_TRAITS:
+                self.skill_traits = [random.choice(SKILL_TRAITS[prof])]
+    
+    def get_trait_effect(self, effect_name):
         total = 0
         for trait in self.traits:
-            if trait in ALL_TRAITS:
-                cat, desc, effects = ALL_TRAITS[trait]
-                if effect_type in effects:
-                    total += effects[effect_type]
+            if trait in POSITIVE_TRAITS:
+                e = POSITIVE_TRAITS[trait]["effect"]
+                if effect_name in e:
+                    total += e[effect_name]
+            if trait in NEGATIVE_TRAITS:
+                e = NEGATIVE_TRAITS[trait]["effect"]
+                if effect_name in e:
+                    total += e[effect_name]
         return total
     
     def get_quality_modifier(self):
@@ -261,400 +323,363 @@ class Survivor:
         elif mood > 30: q = -5
         elif mood > 10: q = -10
         else: q = -15
-        
-        # Traits modify quality
-        q += self.get_trait_effects("work_output")
-        q += self.get_trait_effects("quality_bonus")
-        
-        # Clamp
+        q += self.get_trait_effect("work_output")
         return max(-20, min(20, q))
     
-    def get_mood_contagion(self):
-        if self.happiness > 70: return 2
-        elif self.happiness > 50: return 1
-        elif self.happiness > 30: return 0
-        elif self.happiness > 10: return -1
-        else: return -2
-    
-    def get_contagion_resistance(self):
-        resist = 1.0
-        resist += self.get_trait_effects("mood_contagion")
-        return max(0.25, min(2.0, resist))
-    
-    def get_daily_base_change(self):
+    def get_daily_happiness_change(self):
         change = 0
-        change += self.get_trait_effects("daily_happiness")
+        change += self.get_trait_effect("daily_happiness")
         return max(-10, min(10, change))
-    
-    def get_event_modifier(self, event_val):
-        mod = self.get_trait_effects("negative_event_mod")
-        return event_val + mod
     
     def __str__(self):
         mood = "+" if self.happiness > 60 else "=" if self.happiness > 40 else "-"
         q = self.get_quality_modifier()
-        quality = "++" if q > 5 else "+" if q > 0 else "--" if q < -5 else "-" if q < 0 else "="
-        return f"{self.name} | HP:{self.health} HAPP:{self.happiness}{mood} Q:{q:+d}{quality}"
+        q_str = "++" if q > 5 else "+" if q > 0 else "--" if q < -5 else "-" if q < 0 else ""
+        traits = ", ".join(self.traits[:2])
+        return f"{self.name}: {self.profession} | HP:{self.health} HAPP:{self.happiness}{mood} Q:{q:+d}{q_str}"
 
-# ==================== CREATE CHARACTERS ====================
+# ==================== CREATE SURVIVORS ====================
 
-def create_character(name, age, profession, skills, trait_list, sex="Male"):
-    s = Survivor(name, age, sex, profession)
-    for skill, level in skills.items():
-        s.skills[skill] = level
-    s.traits = trait_list
-    s.trait_names = trait_list.copy()
-    return s
-
-def create_starting_characters():
-    # Marcus - generally positive
-    marcus = create_character("Marcus", 34, "Leader", 
-        {"Scavenging": 35, "Combat": 30, "Building": 25, "Leadership": 30}, 
-        ["Optimist", "Diligent", "Courageous", "Arrogant"], "Male")
-    marcus.happiness = 65
+def create_starting_survivors():
+    survivors = [
+        Survivor("Marcus", "Builder", 34),
+        Survivor("Sarah", "Hunter", 28),
+        Survivor("Ryan", "Scavenger", 42),
+        Survivor("Elena", "Farmer", 24),
+        Survivor("Carlos", "Blacksmith", 38),
+        Survivor("Maria", "Cook", 35),
+    ]
     
-    # Sarah - very positive
-    sarah = create_character("Sarah", 28, "Hunter",
-        {"Hunting": 45, "Fishing": 35, "Scavenging": 20},
-        ["Cheerful", "Compassionate", "Athletic", "Careless"], "Female")
-    sarah.happiness = 70
+    # Give some starting happiness
+    for s in survivors:
+        s.happiness = random.randint(45, 70)
     
-    # Ryan - mostly negative
-    ryan = create_character("Ryan", 42, "Scavenger",
-        {"Scavenging": 50, "Gathering": 35, "Combat": 25},
-        ["Pessimist", "Lazy", "Cynical", "Greedy"], "Male")
-    ryan.happiness = 25
-    
-    # Elena - mixed
-    elena = create_character("Elena", 24, "Builder",
-        {"Building": 40, "Crafting": 35, "Farming": 20},
-        ["Creative", "Stubborn", "Energetic", "Moody"], "Female")
-    elena.happiness = 50
-    
-    return [marcus, sarah, ryan, elena]
+    return survivors
 
 # ==================== ACTIONS ====================
 
-def get_quality_name(q):
-    if q >= 90: return "LEGENDARY"
-    elif q >= 70: return "EXCELLENT"
-    elif q >= 50: return "Good"
-    elif q >= 30: return "Poor"
-    else: return "TERRIBLE"
-
 def do_scavenge(survivor, game):
+    tool_bonus = 0
+    for tool in game.tools:
+        if tool in TOOLS.get("tier_1", {}):
+            if TOOLS["tier_1"][tool]["skill"] == "Scavenging":
+                tool_bonus += TOOLS["tier_1"][tool]["bonus"]
+    
     q_mod = survivor.get_quality_modifier()
-    skill = survivor.skills["Scavenging"] + q_mod
+    skill = survivor.skills.get("Scavenging", 10) + q_mod + tool_bonus
     roll = random.randint(1, 100)
     result = skill + roll
     
-    print(f"\n  {survivor.name} goes scavenging...")
+    print(f"\n  {survivor.name} scavenges...")
     
     if result > 100:
-        found = random.sample(["food", "materials", "medicine", "ammo", "scrap", "book"], 3)
-        for item in found: add_item(item, game, 1)
+        found = random.sample(["food", "wood", "scrap", "stone", "cloth", "medicine"], 3)
+        for item in found:
+            add_item(item, game, 1)
         print(f"    AMAZING! Found: {', '.join(found)}")
     elif result > 70:
-        found = random.sample(["food", "materials", "medicine", "scrap"], 2)
+        found = random.sample(["food", "wood", "scrap", "stone"], 2)
         for item in found: add_item(item, game, 1)
-        print(f"    Good haul: {', '.join(found)}")
+        print(f"    Good: {', '.join(found)}")
     elif result > 40:
-        found = random.choice(["food", "materials", "scrap"])
-        add_item(found, game, 1)
-        print(f"    Found: {found}")
+        add_item(random.choice(["food", "wood", "scrap"]), game, 1)
+        print(f"    Found something.")
     else:
-        if random.random() < 0.25:
-            injury = random.choice(["Cut", "Bruise"])
-            survivor.injuries.append(injury)
-            survivor.health -= 15
-            print(f"    BAD! Got {injury} (-15 HP)")
-        else:
-            print(f"    Found nothing.")
+        print(f"    Nothing.")
 
 def do_hunt(survivor, game):
+    tool_bonus = 0
+    for tool in game.tools:
+        if tool in TOOLS.get("tier_1", {}):
+            if TOOLS["tier_1"][tool]["skill"] == "Hunting":
+                tool_bonus += TOOLS["tier_1"][tool]["bonus"]
+    
     q_mod = survivor.get_quality_modifier()
-    skill = survivor.skills["Hunting"] + q_mod
+    skill = survivor.skills.get("Hunting", 10) + q_mod + tool_bonus
     result = skill + random.randint(1, 100)
     
     print(f"\n  {survivor.name} hunts...")
     if game.weather == "Rain": result -= 30
     
-    if result > 80:
-        game.food += 15
-        print(f"    Big deer! +15 food")
-    elif result > 50:
-        game.food += 8
-        print(f"    Rabbit! +8 food")
-    elif result > 30:
-        game.food += 4
-        print(f"    Small catch. +4 food")
-    else:
-        print(f"    No luck.")
-
-def do_gather(survivor, game):
-    q_mod = survivor.get_quality_modifier()
-    skill = survivor.skills["Gathering"] + q_mod
-    
-    print(f"\n  {survivor.name} gathers...")
-    finds = []
-    for _ in range(3):
-        if skill + random.randint(1, 100) > 40:
-            finds.append(random.choice(["berries", "firewood", "herbs", "mushrooms"]))
-    
-    if finds:
-        for item in finds:
-            if item == "berries": game.food += 2
-            elif item == "firewood": game.materials += 2
-            elif item == "herbs": game.medicine += 1
-            else: game.food += 1
-        print(f"    Found: {', '.join(finds)}")
-    else:
-        print(f"    Nothing.")
+    if result > 80: game.food += 15; print(f"    Big deer! +15 food")
+    elif result > 50: game.food += 8; print(f"    Rabbit! +8 food")
+    elif result > 30: game.food += 4; print(f"    Small catch.")
+    else: print(f"    No luck.")
 
 def do_farm(survivor, game):
+    tool_bonus = 0
+    for tool in game.tools:
+        if tool in TOOLS.get("tier_1", {}):
+            if TOOLS["tier_1"][tool]["skill"] == "Farming":
+                tool_bonus += TOOLS["tier_1"][tool]["bonus"]
+    
     q_mod = survivor.get_quality_modifier()
-    skill = survivor.skills["Farming"] + q_mod
-    roll = skill + random.randint(1, 100)
+    skill = survivor.skills.get("Farming", 10) + q_mod + tool_bonus
+    result = skill + random.randint(1, 100)
     
     print(f"\n  {survivor.name} farms...")
-    if "Farm" not in game.buildings:
-        print(f"    No farm!")
+    
+    if "Basic Garden" not in game.buildings:
+        print(f"    No garden! Need to build one.")
         return
     
-    roll += 10 if game.weather == "Clear" else -20 if game.weather == "Storm" else 0
-    
-    if roll > 60:
-        food_gain = random.randint(5, 12)
-        game.food += food_gain
-        print(f"    {get_quality_name(roll)} harvest! +{food_gain} food")
-    elif roll > 30:
+    if result > 60:
+        game.food += random.randint(5, 12)
+        print(f"    Good harvest!")
+    elif result > 30:
         game.food += random.randint(2, 5)
         print(f"    Harvest.")
     else:
         print(f"    Poor harvest.")
 
 def do_build(survivor, game):
+    tool_bonus = 0
+    for tool in game.tools:
+        if tool in TOOLS.get("tier_1", {}):
+            if TOOLS["tier_1"][tool]["skill"] == "Building":
+                tool_bonus += TOOLS["tier_1"][tool]["bonus"]
+    
     q_mod = survivor.get_quality_modifier()
-    skill = survivor.skills["Building"] + q_mod
+    skill = survivor.skills.get("Building", 10) + q_mod + tool_bonus
     
     print(f"\n  {survivor.name} builds...")
-    if game.materials < 10:
-        print(f"    Need 10 materials!")
+    
+    # List available buildings
+    available = [b for b in TECH_1_BUILDINGS if b not in game.buildings]
+    if not available:
+        print(f"    All buildings built!")
         return
     
-    roll = skill + random.randint(1, 100)
-    if roll > 50:
-        building = random.choice(["Workshop", "Well", "Greenhouse", "Pen"])
-        game.buildings[building] = game.buildings.get(building, 0) + 1
-        game.materials -= 10
-        print(f"    {get_quality_name(roll)}! Built {building}!")
+    # Try to build
+    result = skill + random.randint(1, 100)
+    if result > 50 and game.scrap >= 5 and game.wood >= 5:
+        building = random.choice(available[:5])
+        cost = TECH_1_BUILDINGS[building]["cost"]
+        
+        can_afford = True
+        for res, amt in cost.items():
+            if res == "scrap" and game.scrap < amt: can_afford = False
+            elif res == "wood" and game.wood < amt: can_afford = False
+            elif res == "stone" and game.stone < amt: can_afford = False
+            elif res == "cloth" and game.cloth < amt: can_afford = False
+        
+        if can_afford:
+            for res, amt in cost.items():
+                if res == "scrap": game.scrap -= amt
+                elif res == "wood": game.wood -= amt
+                elif res == "stone": game.stone -= amt
+                elif res == "cloth": game.cloth -= amt
+            
+            game.buildings[building] = game.buildings.get(building, 0) + 1
+            print(f"    Built {building}!")
+        else:
+            print(f"    Can't afford {building}!")
     else:
-        game.materials -= 3
-        print(f"    Progress.")
-
-def do_rest(survivor, game):
-    print(f"\n  {survivor.name} rests...")
-    survivor.health = min(100, survivor.health + random.randint(10, 20))
-    survivor.stamina = min(100, survivor.stamina + random.randint(20, 35))
-    print(f"    +HP, +Stamina")
+        print(f"    Made progress.")
 
 def do_cook(survivor, game):
     q_mod = survivor.get_quality_modifier()
-    skill = survivor.skills["Cooking"] + q_mod
+    skill = survivor.skills.get("Cooking", 10) + q_mod
     
     print(f"\n  {survivor.name} cooks...")
+    
     if game.food < 5:
         print(f"    No food!")
         return
     
     if random.random() < 0.3:
-        game.food -= 3
-        game.food += 7
-        print(f"    Special meal! +7 food")
+        game.food += 4
+        print(f"    Good meal!")
         for s in game.survivors: s.happiness += 3
     else:
-        game.food -= 3
-        game.food += 4
-        print(f"    +4 food")
+        game.food += 3
+        print(f"    Cooked.")
+
+def do_gather(survivor, game):
+    tool_bonus = 0
+    skill = survivor.skills.get("Gathering", 10) + survivor.get_quality_modifier() + tool_bonus
+    result = skill + random.randint(1, 100)
+    
+    print(f"\n  {survivor.name} gathers...")
+    
+    finds = []
+    for _ in range(3):
+        if result + random.randint(1, 50) > 40:
+            finds.append(random.choice(["berries", "wood", "herbs", "mushrooms"]))
+    
+    if finds:
+        for item in finds:
+            if item in ["berries", "mushrooms"]: game.food += 2
+            elif item == "wood": game.wood += 3
+            elif item == "herbs": game.medicine += 1
+        print(f"    Found: {', '.join(finds)}")
+    else:
+        print(f"    Nothing.")
+
+def do_rest(survivor, game):
+    print(f"\n  {survivor.name} rests...")
+    heal = min(20, (100 - survivor.health))
+    survivor.health += heal
+    survivor.happiness += 5
+    print(f"    +{heal} HP, +5 happiness")
 
 def do_guard(survivor, game):
     q_mod = survivor.get_quality_modifier()
-    skill = survivor.skills["Combat"] + q_mod
+    skill = survivor.skills.get("Combat", 10) + q_mod
     
     print(f"\n  {survivor.name} guards...")
+    
     if random.random() < 0.2:
-        enemy = random.choice(["wolf", "zombie", "raider"])
-        print(f"    Enemy! A {enemy} attacks!")
-        roll = skill + random.randint(1, 100)
-        if roll > 60:
-            print(f"    Defeated it!")
+        print(f"    Enemy!")
+        if skill + random.randint(1, 100) > 60:
+            print(f"    Defeated!")
             survivor.happiness += 5
         else:
-            damage = random.randint(10, 25)
+            damage = random.randint(10, 20)
             survivor.health -= damage
             print(f"    Took {damage} damage!")
     else:
         print(f"    Quiet.")
 
+def do_craft(survivor, game):
+    """Craft tools"""
+    print(f"\n  {survivor.name} crafts...")
+    
+    # Check for workbench
+    if "Basic Workbench" not in game.buildings:
+        print(f"    Need workbench!")
+        return
+    
+    # Can craft basic tools if have materials
+    if game.scrap >= 5:
+        tool = random.choice(["Knife", "Hammer", "Saw"])
+        game.scrap -= 5
+        game.tools.append(tool)
+        print(f"    Crafted {tool}!")
+    else:
+        print(f"    Need 5 scrap!")
+
 # ==================== HELPERS ====================
 
-def add_item(item, game, amount=1):
-    if item == "food": game.food += amount * random.randint(2, 5)
-    elif item == "materials": game.materials += amount * random.randint(1, 3)
-    elif item == "scrap": game.scrap += amount * random.randint(2, 5)
+def add_item(item, game, amount):
+    if item == "food": game.food += amount * random.randint(2, 4)
+    elif item == "wood": game.wood += amount * random.randint(2, 4)
+    elif item == "scrap": game.scrap += amount * random.randint(2, 4)
+    elif item == "stone": game.stone += amount * random.randint(1, 3)
+    elif item == "cloth": game.cloth += amount
     elif item == "medicine": game.medicine += amount
-    elif item == "ammo": game.ammo += amount * random.randint(1, 3)
-    elif item == "book":
-        books = ["Hunting Guide", "Fishing Manual", "Carpentry", "First Aid", "Botany"]
-        found = random.choice(books)
-        if found not in game.books:
-            game.books.append(found)
-            print(f"    NEW BOOK: {found}!")
 
-def check_game_over(game):
-    if game.food <= 0:
-        print("\n" + "="*50)
-        print("GAME OVER - Starvation!")
-        return True
-    if not any(s.is_alive for s in game.survivors):
-        print("\n" + "="*50)
-        print("GAME OVER - Everyone died!")
-        return True
-    return False
-
-def mood_contagion(game):
-    for s in game.survivors:
-        if not s.is_alive: continue
-        for other in game.survivors:
-            if s == other or not other.is_alive: continue
-            influence = other.get_mood_contagion()
-            resistance = s.get_contagion_resistance()
-            if influence != 0:
-                s.happiness += int(influence * resistance * 0.5)
-
-def daily_mood_change(game):
-    for s in game.survivors:
-        if not s.is_alive: continue
-        change = s.get_daily_base_change()
-        if game.weather == "Rain":
-            change += s.get_trait_effects("weather_mood")
-        s.happiness += change
-
-def print_status(game):
-    print(f"\n{'='*60}")
-    print(f"DAY {game.day} - {game.season} - {game.weather} {game.temperature}F")
-    print(f"{'='*60}")
-    print(f"\nFOOD: {game.food} | WATER: {game.water} | SCRAP: {game.scrap}")
-    print(f"MATERIALS: {game.materials} | MEDS: {game.medicine} | AMMO: {game.ammo}")
-    print(f"\nBUILDINGS: {', '.join([f'{k}(v{v})' for k,v in game.buildings.items()])}")
-    
-    print(f"\nSURVIVORS ({len(game.survivors)}):")
-    print("-" * 55)
-    for s in game.survivors:
-        if s.health > 0:
-            q = int(s.get_quality_modifier())
-            q_str = "++" if q > 5 else "+" if q > 0 else "--" if q < -5 else "-" if q < 0 else ""
-            traits = ", ".join(s.traits[:2])
-            print(f"  {s.name}: {s.job} | HP:{s.health} HAPP:{s.happiness} Q:{q:+d}{q_str}")
-            print(f"    Traits: {traits}")
-
-def get_job_choice(survivor):
-    jobs = [("1", "Scavenge"), ("2", "Hunt"), ("3", "Gather"), ("4", "Farm"),
-            ("5", "Build"), ("6", "Cook"), ("7", "Rest"), ("8", "Guard")]
-    skill_map = {"1": "Scavenging", "2": "Hunting", "3": "Gathering", "4": "Farming",
-                 "5": "Building", "6": "Cooking", "7": "Rest", "8": "Combat"}
-    
-    print(f"\n{survivor.name}'s skills:")
-    for num, job in jobs:
-        skill = survivor.skills.get(skill_map[num], 10)
-        q_mod = int(survivor.get_quality_modifier())
-        print(f"  {num}: {job} (Skill:{skill} Q:{q_mod:+d})")
-    
-    while True:
-        choice = input(f"\nTask for {survivor.name} (1-8): ").strip()
-        for num, job in jobs:
-            if choice == num:
-                return job, skill_map[num]
-        print("1-8 please.")
+def mood_contagion(survivors):
+    for s in survivors:
+        for other in survivors:
+            if s != other and other.is_alive:
+                if other.happiness > 70: s.happiness += 1
+                elif other.happiness < 30: s.happiness -= 1
 
 # ==================== MAIN ====================
 
 def main():
     print("="*60)
-    print("         OUTPOST ZERO v3.1")
-    print("   Extended Traits (Positive & Negative)")
+    print("         OUTPOST ZERO v4.0")
+    print("   Tools, Professions, New Stats")
+    print(f"   Difficulty: {DIFFICULTY.upper()}")
     print("="*60)
-    print()
     
     game = Game()
-    game.survivors = create_starting_characters()
+    game.survivors = create_starting_survivors()
     
-    print("4 survivors with mixed traits!")
-    print("Watch how traits affect everything...")
+    print("\n6 survivors with professions!")
+    print("Tools and stats now matter!")
     print()
     
     while not game.game_over:
         game.update_season()
         game.update_weather()
         
-        print_status(game)
+        # Status
+        print(f"\n{'='*50}")
+        print(f"DAY {game.day} - {game.season} - {game.weather} {game.temperature}F")
+        print(f"{'='*50}")
+        print(f"FOOD: {game.food} | WATER: {game.water}")
+        print(f"WOOD: {game.wood} | STONE: {game.stone} | SCRAP: {game.scrap}")
+        print(f"TOOLS: {', '.join(game.tools)}")
         
-        mood_contagion(game)
-        daily_mood_change(game)
+        print(f"\nBUILDINGS: {', '.join([f'{k}(v{v})' for k,v in game.buildings.items()])}")
         
+        print(f"\nSURVIVORS ({len(game.survivors)}):")
+        for s in game.survivors:
+            if s.is_alive:
+                print(f"  {s}")
+        
+        # Mood contagion
+        mood_contagion(game.survivors)
+        
+        # Assign jobs
         print("\n" + "-"*40)
         print("ASSIGN TASKS")
         print("-"*40)
         
+        jobs = [("1", "Scavenge"), ("2", "Hunt"), ("3", "Farm"), ("4", "Build"),
+                ("5", "Gather"), ("6", "Cook"), ("7", "Rest"), ("8", "Guard"), ("9", "Craft Tools")]
+        
         for survivor in game.survivors:
             if survivor.health <= 0: continue
-            task, skill = get_job_choice(survivor)
-            survivor.job = task
             
-            if task == "Scavenge": survivor.stamina -= 20; do_scavenge(survivor, game)
-            elif task == "Hunt": survivor.stamina -= 25; do_hunt(survivor, game)
-            elif task == "Gather": survivor.stamina -= 15; do_gather(survivor, game)
-            elif task == "Farm": survivor.stamina -= 15; do_farm(survivor, game)
-            elif task == "Build": survivor.stamina -= 20; do_build(survivor, game)
-            elif task == "Cook": survivor.stamina -= 10; do_cook(survivor, game)
-            elif task == "Rest": do_rest(survivor, game)
-            elif task == "Guard": survivor.stamina -= 15; do_guard(survivor, game)
+            print(f"\n{survivor.name} ({survivor.profession}):")
+            print(f"  Stats: INT:{survivor.intellect} STA:{survivor.stamina} CHA:{survivor.charisma} HP:{survivor.health_max}")
+            
+            for num, job in jobs:
+                print(f"  {num}: {job}")
+            
+            while True:
+                choice = input(f"Task (1-9): ").strip()
+                if choice in [n for n, _ in jobs]:
+                    survivor.job = jobs[int(choice)-1][1]
+                    break
+            
+            # Do task
+            if survivor.job == "Scavenge": do_scavenge(survivor, game)
+            elif survivor.job == "Hunt": do_hunt(survivor, game)
+            elif survivor.job == "Farm": do_farm(survivor, game)
+            elif survivor.job == "Build": do_build(survivor, game)
+            elif survivor.job == "Gather": do_gather(survivor, game)
+            elif survivor.job == "Cook": do_cook(survivor, game)
+            elif survivor.job == "Rest": do_rest(survivor, game)
+            elif survivor.job == "Guard": do_guard(survivor, game)
+            elif survivor.job == "Craft Tools": do_craft(survivor, game)
             
             if survivor.health <= 0:
                 print(f"\n💀 {survivor.name} died!")
                 survivor.is_alive = False
-                for s in game.survivors: s.happiness -= 15
         
-        alive = len([s for s in game.survivors if s.is_alive and s.health > 0])
+        # Eat
+        alive = len([s for s in game.survivors if s.is_alive])
         game.food -= alive * 2
         print(f"\n\nAte {alive * 2} food.")
         
-        # Night events
-        print("\n" + "-"*40)
-        print("NIGHT")
-        print("-"*40)
-        
-        roll = random.randint(1, 100)
-        if roll < 5: print("Bad dreams...")
-        elif roll < 10: game.food += random.randint(2, 6)
-        elif roll < 15:
-            v = random.choice([s for s in game.survivors if s.is_alive])
-            v.sickness = random.choice(["Cold", "Flu"]); v.health -= 10
-        
+        # Daily happiness
         for s in game.survivors:
-            if s.is_alive: s.happiness = max(-100, min(100, s.happiness))
+            if s.is_alive:
+                s.happiness += s.get_daily_happiness_change()
+                s.happiness = max(-100, min(100, s.happiness))
+        
+        # Night events
+        print("\n--- Night ---")
+        if random.random() < 0.1:
+            print("Good night.")
         
         game.survivors = [s for s in game.survivors if s.is_alive]
         game.day += 1
         
-        if check_game_over(game):
+        if game.food <= 0:
+            print("\nSTARVATION!")
             game.game_over = True
         
         if not game.game_over:
-            if input("\nNext day? (q to quit): ").lower() == 'q':
+            if input("\nNext? ").lower() == 'q':
                 break
     
-    print(f"\nGame over! Survived {game.day} days!")
+    print(f"\nSurvived {game.day} days!")
 
 if __name__ == "__main__":
     main()
